@@ -1,4 +1,7 @@
 pub mod commands;
+pub mod core;
+pub mod database;
+pub mod media;
 pub mod worker;
 
 use std::sync::Arc;
@@ -7,6 +10,9 @@ use tauri::{AppHandle, Emitter, Manager};
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 
+use core::projects::ProjectManager;
+use database::AppDatabase;
+use media::preview_server::MediaPreviewServer;
 use worker::protocol::{TaskProgressEvent, WorkerStatus};
 use worker::{WorkerConfig, WorkerEventSink, WorkerManager};
 
@@ -33,7 +39,33 @@ pub fn run() {
         .init();
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
+            let app_data_dir = app
+                .path()
+                .app_data_dir()
+                .expect("failed to resolve Tauri app data directory");
+            let db_path = app_data_dir.join("xakustudio.db");
+
+            let (db, preview_server) = tauri::async_runtime::block_on(async {
+                let db = AppDatabase::connect(&db_path)
+                    .await
+                    .expect("failed to initialize XakuStudio SQLite database");
+                let preview_server = MediaPreviewServer::start()
+                    .await
+                    .expect("failed to start local media preview server");
+                (db, preview_server)
+            });
+
+            let project_manager = Arc::new(ProjectManager::new(db, preview_server));
+            let pm_init = Arc::clone(&project_manager);
+            tauri::async_runtime::spawn(async move {
+                if let Err(err) = pm_init.register_existing_assets().await {
+                    error!("Failed to register existing media assets: {err}");
+                }
+            });
+            app.manage(project_manager);
+
             let sink = Arc::new(TauriWorkerEventSink {
                 app: app.handle().clone(),
             });
@@ -55,6 +87,15 @@ pub fn run() {
             commands::worker::restart_worker,
             commands::worker::run_worker_self_test,
             commands::worker::cancel_worker_task,
+            commands::projects::get_default_projects_dir,
+            commands::projects::get_media_engine_status,
+            commands::projects::list_projects,
+            commands::projects::create_project,
+            commands::projects::open_project_manifest,
+            commands::projects::get_project_summary,
+            commands::projects::rename_project,
+            commands::projects::delete_project,
+            commands::projects::import_project_media,
         ])
         .build(tauri::generate_context!())
         .expect("error while building XakuStudio Tauri application")
