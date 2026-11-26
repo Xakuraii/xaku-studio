@@ -3,21 +3,16 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Sidebar } from "@/components/Sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { HomeDashboard } from "@/features/home/HomeDashboard";
+import { ProjectsView } from "@/features/projects/ProjectsView";
 import { SettingsView } from "@/features/settings/SettingsView";
 import { useAppStore, type NavSection } from "@/stores/appStore";
 
 const queryClient = new QueryClient();
 
 const STAGE_DETAILS: Record<
-  Exclude<NavSection, "home" | "settings">,
+  Exclude<NavSection, "home" | "projects" | "settings">,
   { title: string; stage: string; description: string }
 > = {
-  projects: {
-    title: "Projects",
-    stage: "Stage 2 — SQLite & FFmpeg Media Engine",
-    description:
-      "Project creation, non-destructive video import, FFprobe inspection, and media asset management will be enabled in Stage 2.",
-  },
   "auto-dubbing": {
     title: "Auto-Dubbing Pipeline",
     stage: "Stage 4–7 — End-to-End Dubbing Workflow",
@@ -70,6 +65,8 @@ function AppContent() {
         <div className="mx-auto max-w-6xl">
           {activeSection === "home" ? (
             <HomeDashboard />
+          ) : activeSection === "projects" ? (
+            <ProjectsView />
           ) : activeSection === "settings" ? (
             <SettingsView />
           ) : (

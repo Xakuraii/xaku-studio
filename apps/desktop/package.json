@@ -14,6 +14,7 @@
   "dependencies": {
     "@tanstack/react-query": "^5.108.4",
     "@tauri-apps/api": "^2.12.5",
+    "@tauri-apps/plugin-dialog": "^2.8.4",
     "@xakustudio/shared": "*",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
