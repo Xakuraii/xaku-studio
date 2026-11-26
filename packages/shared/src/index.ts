@@ -58,3 +58,85 @@ export interface SelfTestResult {
   steps_completed: number;
   python_version: string;
 }
+
+export interface MediaEngineStatus {
+  ffmpeg_available: boolean;
+  ffprobe_available: boolean;
+  ffmpeg_version: string | null;
+  has_nvenc: boolean;
+  has_libx264: boolean;
+  has_libass: boolean;
+  has_rubberband: boolean;
+  error: string | null;
+}
+
+export interface ProjectRecord {
+  id: string;
+  name: string;
+  root_path: string;
+  source_lang: string;
+  target_lang: string;
+  preset: string;
+  settings_json: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MediaAssetRecord {
+  id: string;
+  project_id: string;
+  role: string;
+  file_path: string;
+  sha256: string | null;
+  duration_ms: number | null;
+  width: number | null;
+  height: number | null;
+  fps_num: number | null;
+  fps_den: number | null;
+  audio_channels: number | null;
+  sample_rate: number | null;
+  metadata_json: string;
+  created_at: string;
+}
+
+export interface VideoStreamInfo {
+  index: number;
+  codec: string;
+  width: number;
+  height: number;
+  fps_num: number;
+  fps_den: number;
+}
+
+export interface AudioStreamInfo {
+  index: number;
+  codec: string;
+  channels: number;
+  sample_rate: number;
+  language: string | null;
+}
+
+export interface SubtitleStreamInfo {
+  index: number;
+  codec: string;
+  language: string | null;
+  title: string | null;
+}
+
+export interface MediaInspection {
+  format_name: string;
+  duration_ms: number;
+  size_bytes: number;
+  video: VideoStreamInfo | null;
+  audio_streams: AudioStreamInfo[];
+  subtitle_streams: SubtitleStreamInfo[];
+}
+
+export interface ProjectSummary {
+  project: ProjectRecord;
+  assets: MediaAssetRecord[];
+  source_preview_url: string | null;
+  inspection: MediaInspection | null;
+  waveform_peaks: number[] | null;
+}

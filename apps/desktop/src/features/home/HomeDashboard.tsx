@@ -1,8 +1,19 @@
-import { Cpu, Play, RefreshCw, Server, Terminal, Wifi } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import {
+  Cpu,
+  Film,
+  FolderKanban,
+  Play,
+  RefreshCw,
+  Server,
+  Terminal,
+  Wifi,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useWorker } from "@/hooks/useWorker";
+import { getMediaEngineStatus } from "@/lib/tauri";
 import { useAppStore } from "@/stores/appStore";
 
 function stateTone(state?: string) {
@@ -27,8 +38,17 @@ export function HomeDashboard() {
     selfTestMutation,
   } = useWorker();
   const latestProgress = useAppStore((s) => s.latestProgress);
+  const setActiveSection = useAppStore((s) => s.setActiveSection);
+
+  const mediaQuery = useQuery({
+    queryKey: ["media", "engine-status"],
+    queryFn: getMediaEngineStatus,
+    enabled: inTauri,
+  });
+
   const status = statusQuery.data;
   const caps = status?.capabilities;
+  const media = mediaQuery.data;
 
   return (
     <div className="space-y-6">
@@ -38,12 +58,21 @@ export function HomeDashboard() {
             Workstation Foundation
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Chinese → Khmer AI video localization engine. Stage 1 verifies the
-            persistent Rust–Python 3.12.10 JSON-RPC worker and hardware probe.
+            Chinese → Khmer AI video localization engine. Stage 2 adds SQLite
+            persistence, non-destructive project management, and FFmpeg media
+            inspection & preview.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setActiveSection("projects")}
+          >
+            <FolderKanban className="h-3.5 w-3.5" />
+            Open Projects
+          </Button>
           <Button
             variant="secondary"
             size="sm"
@@ -80,12 +109,12 @@ export function HomeDashboard() {
             <code className="rounded bg-surface-elevated px-1.5 py-0.5 font-mono">
               npm run dev
             </code>{" "}
-            to connect to the Rust core and Python 3.12.10 worker.
+            to connect to the Rust core, SQLite database, FFmpeg engine, and Python 3.12.10 worker.
           </CardContent>
         </Card>
       )}
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex-row items-center justify-between">
             <CardTitle className="flex items-center gap-2">
@@ -148,7 +177,61 @@ export function HomeDashboard() {
             <div className="flex justify-between">
               <span className="text-muted-foreground">PyTorch Loaded</span>
               <span className="font-mono">
-                {caps ? (caps.torch_installed ? "yes" : "not yet (Stage 3+)") : "—"}
+                {caps ? (caps.torch_installed ? "yes" : "Stage 3+") : "—"}
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex-row items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <Film className="h-4 w-4 text-primary" />
+              FFmpeg Engine
+            </CardTitle>
+            <Badge
+              tone={
+                media?.ffmpeg_available && media?.ffprobe_available
+                  ? "success"
+                  : media
+                    ? "danger"
+                    : "neutral"
+              }
+            >
+              {media
+                ? media.ffmpeg_available && media.ffprobe_available
+                  ? "Ready"
+                  : "Missing"
+                : inTauri
+                  ? "Checking"
+                  : "Unavailable"}
+            </Badge>
+          </CardHeader>
+          <CardContent className="space-y-1.5 text-xs">
+            <div className="flex justify-between gap-2">
+              <span className="text-muted-foreground">Version</span>
+              <span className="truncate font-mono">
+                {media?.ffmpeg_version?.replace("ffmpeg version ", "") ?? "—"}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">H.264 / NVENC</span>
+              <span className="font-mono">
+                {media
+                  ? `${media.has_libx264 ? "x264" : "no"} / ${media.has_nvenc ? "nvenc" : "no"}`
+                  : "—"}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">libass Subtitles</span>
+              <span className="font-mono">
+                {media ? (media.has_libass ? "enabled" : "missing") : "—"}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Rubberband Sync</span>
+              <span className="font-mono">
+                {media ? (media.has_rubberband ? "enabled" : "atempo") : "—"}
               </span>
             </div>
           </CardContent>
@@ -181,7 +264,9 @@ export function HomeDashboard() {
           <CardContent className="space-y-3 text-xs">
             <div className="space-y-1.5">
               <div className="flex justify-between text-muted-foreground">
-                <span>{latestProgress?.message ?? "Ready to test JSON-RPC streaming"}</span>
+                <span className="truncate">
+                  {latestProgress?.message ?? "Ready to test JSON-RPC streaming"}
+                </span>
                 <span className="font-mono">
                   {latestProgress ? `${latestProgress.percent.toFixed(0)}%` : "0%"}
                 </span>
@@ -196,7 +281,9 @@ export function HomeDashboard() {
 
             {selfTestMutation.data && (
               <div className="rounded border border-border bg-surface-elevated p-2 font-mono text-[11px]">
-                Task {selfTestMutation.data.task_id.slice(0, 8)}: {selfTestMutation.data.steps_completed} steps ({selfTestMutation.data.python_version})
+                Task {selfTestMutation.data.task_id.slice(0, 8)}:{" "}
+                {selfTestMutation.data.steps_completed} steps (
+                {selfTestMutation.data.python_version})
               </div>
             )}
 
