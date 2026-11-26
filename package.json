@@ -1,0 +1,17 @@
+{
+  "name": "xakustudio",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/desktop",
+    "packages/shared"
+  ],
+  "scripts": {
+    "dev": "npm --workspace @xakustudio/desktop run tauri:dev",
+    "dev:ui": "npm --workspace @xakustudio/desktop run dev",
+    "build": "npm --workspace @xakustudio/desktop run build",
+    "tauri:build": "npm --workspace @xakustudio/desktop run tauri:build",
+    "test": "npm --workspace @xakustudio/desktop run test",
+    "typecheck": "npm --workspace @xakustudio/desktop run typecheck"
+  }
+}
