@@ -12,6 +12,7 @@ use crate::resources::{
     list_provider_catalog, probe_system_resources, ProviderCatalogEntry, SystemResourceInfo,
 };
 use crate::scheduler::{NewTaskSpec, ResourceClass, TaskScheduler};
+use crate::worker::WorkerManager;
 
 #[tauri::command]
 pub async fn get_system_resources() -> Result<SystemResourceInfo, String> {
@@ -19,8 +20,24 @@ pub async fn get_system_resources() -> Result<SystemResourceInfo, String> {
 }
 
 #[tauri::command]
-pub async fn list_providers_status() -> Result<Vec<ProviderCatalogEntry>, String> {
-    Ok(list_provider_catalog())
+pub async fn list_providers_status(
+    worker: State<'_, Arc<WorkerManager>>,
+) -> Result<Vec<ProviderCatalogEntry>, String> {
+    let mut catalog = list_provider_catalog();
+    let status = worker.status().await;
+    if let Some(caps) = status.capabilities {
+        for entry in &mut catalog {
+            if let Some(live) = caps
+                .providers
+                .iter()
+                .find(|p| p.provider_id == entry.provider_id)
+            {
+                entry.available = live.available;
+                entry.version = live.version.clone();
+            }
+        }
+    }
+    Ok(catalog)
 }
 
 #[tauri::command]

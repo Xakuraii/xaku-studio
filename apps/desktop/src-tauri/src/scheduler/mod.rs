@@ -1,15 +1,18 @@
 use std::collections::HashMap;
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
-use tokio::sync::{Mutex, Notify, Semaphore};
+use serde_json::{json, Map, Value};
+use tokio::sync::{Mutex, Notify, RwLock, Semaphore};
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 use uuid::Uuid;
 
 use crate::database::{AppDatabase, TaskDependencyRecord, TaskRecord};
+use crate::resources::credentials::CredentialStore;
 use crate::worker::WorkerManager;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -59,6 +62,12 @@ fn default_max_retries() -> i64 {
 
 pub type TaskEventCallback = Arc<dyn Fn(&TaskRecord) + Send + Sync>;
 
+pub type NativeTaskHandler = Arc<
+    dyn Fn(TaskRecord) -> Pin<Box<dyn Future<Output = Result<Value, (String, String)>> + Send>>
+        + Send
+        + Sync,
+>;
+
 pub struct TaskScheduler {
     db: AppDatabase,
     worker: Arc<WorkerManager>,
@@ -67,6 +76,7 @@ pub struct TaskScheduler {
     media_render_sem: Arc<Semaphore>,
     network_io_sem: Arc<Semaphore>,
     active_tokens: Arc<Mutex<HashMap<String, CancellationToken>>>,
+    native_handlers: Arc<RwLock<HashMap<String, NativeTaskHandler>>>,
     notify: Arc<Notify>,
     on_task_update: TaskEventCallback,
 }
@@ -96,6 +106,7 @@ impl TaskScheduler {
             media_render_sem: Arc::new(Semaphore::new(1)),
             network_io_sem: Arc::new(Semaphore::new(network_io_slots.max(1))),
             active_tokens: Arc::new(Mutex::new(HashMap::new())),
+            native_handlers: Arc::new(RwLock::new(HashMap::new())),
             notify: Arc::new(Notify::new()),
             on_task_update,
         });
@@ -103,6 +114,17 @@ impl TaskScheduler {
         scheduler.spawn_loop();
         scheduler.notify.notify_one();
         Ok(scheduler)
+    }
+
+    pub async fn register_native_handler(
+        &self,
+        task_type: impl Into<String>,
+        handler: NativeTaskHandler,
+    ) {
+        self.native_handlers
+            .write()
+            .await
+            .insert(task_type.into(), handler);
     }
 
     fn spawn_loop(self: &Arc<Self>) {
@@ -318,8 +340,15 @@ impl TaskScheduler {
 
         let input: Value = serde_json::from_str(&task.input_json).unwrap_or_else(|_| json!({}));
         let mode = input.get("mode").and_then(Value::as_str).unwrap_or("worker");
+        let native_handler = self.native_handlers.read().await.get(&task.task_type).cloned();
 
-        let outcome: Result<Value, (String, String)> = if mode == "local_sleep" {
+        let outcome: Result<Value, (String, String)> = if let Some(handler) = native_handler {
+            let fut = handler(task.clone());
+            tokio::select! {
+                res = fut => res,
+                _ = token.cancelled() => Err(("Cancelled".to_string(), "Task cancelled by user".to_string())),
+            }
+        } else if mode == "local_sleep" {
             let duration_ms = input.get("duration_ms").and_then(Value::as_u64).unwrap_or(100);
             let fail = input.get("fail").and_then(Value::as_bool).unwrap_or(false);
             let mut elapsed = 0u64;
@@ -344,16 +373,38 @@ impl TaskScheduler {
                 Ok(json!({ "status": "passed", "elapsed_ms": elapsed }))
             }
         } else {
+            let mut payload = input.clone();
+            if let Some(obj) = payload.as_object_mut() {
+                if let Some(keys_val) = obj.remove("credential_keys") {
+                    if let Some(keys) = keys_val.as_array() {
+                        let mut creds = Map::new();
+                        for k in keys {
+                            if let Some(key_name) = k.as_str() {
+                                if let Ok(Some(secret)) = CredentialStore::get_secret(key_name) {
+                                    if !secret.is_empty() {
+                                        creds.insert(key_name.to_string(), Value::String(secret));
+                                    }
+                                }
+                            }
+                        }
+                        if !creds.is_empty() {
+                            obj.insert("credentials".to_string(), Value::Object(creds));
+                        }
+                    }
+                }
+            }
+
             let worker = Arc::clone(&self.worker);
             let task_id = task.id.clone();
             let task_type = task.task_type.clone();
-            let worker_fut = worker.call_rpc(
+            let worker_fut = worker.call_rpc_with_timeout(
                 "task.run",
                 json!({
                     "task_id": task_id,
                     "task_type": task_type,
-                    "payload": input,
+                    "payload": payload,
                 }),
+                None,
             );
             tokio::pin!(worker_fut);
 

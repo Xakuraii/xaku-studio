@@ -7,13 +7,14 @@ pub mod resources;
 pub mod scheduler;
 pub mod worker;
 
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use tauri::{AppHandle, Emitter, Manager};
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 
 use core::projects::ProjectManager;
+use core::transcription::TranscriptionService;
 use database::AppDatabase;
 use downloads::DownloadManager;
 use media::preview_server::MediaPreviewServer;
@@ -24,6 +25,7 @@ use worker::{WorkerConfig, WorkerEventSink, WorkerManager};
 
 struct TauriWorkerEventSink {
     app: AppHandle,
+    db: OnceLock<AppDatabase>,
 }
 
 impl WorkerEventSink for TauriWorkerEventSink {
@@ -33,6 +35,15 @@ impl WorkerEventSink for TauriWorkerEventSink {
 
     fn on_task_progress(&self, progress: &TaskProgressEvent) {
         let _ = self.app.emit("worker:progress", progress);
+        if let Some(db) = self.db.get() {
+            let db = db.clone();
+            let task_id = progress.task_id.clone();
+            let pct = progress.percent;
+            let msg = progress.message.clone();
+            tauri::async_runtime::spawn(async move {
+                let _ = db.update_task_progress(&task_id, pct, &msg).await;
+            });
+        }
     }
 }
 
@@ -52,22 +63,43 @@ pub fn run() {
                 .app_data_dir()
                 .expect("failed to resolve Tauri app data directory");
             let db_path = app_data_dir.join("xakustudio.db");
+            let models_dir = app_data_dir.join("models");
+            let hf_home = models_dir.join("huggingface");
 
             let sink = Arc::new(TauriWorkerEventSink {
                 app: app.handle().clone(),
+                db: OnceLock::new(),
             });
-            let worker = WorkerManager::new(WorkerConfig::discover_default(), sink);
+
+            let mut worker_config = WorkerConfig::discover_default();
+            worker_config.env = vec![
+                (
+                    "XAKU_MODELS_DIR".to_string(),
+                    models_dir.to_string_lossy().into_owned(),
+                ),
+                (
+                    "HF_HOME".to_string(),
+                    hf_home.to_string_lossy().into_owned(),
+                ),
+                (
+                    "HF_HUB_DISABLE_SYMLINKS_WARNING".to_string(),
+                    "1".to_string(),
+                ),
+            ];
+
+            let worker = WorkerManager::new(worker_config, Arc::clone(&sink) as Arc<dyn WorkerEventSink>);
             app.manage(Arc::clone(&worker));
 
             let app_handle_dl = app.handle().clone();
             let app_handle_sched = app.handle().clone();
             let worker_for_sched = Arc::clone(&worker);
 
-            let (db, preview_server, sys_res, download_mgr, task_scheduler) =
+            let (db, preview_server, sys_res, download_mgr, task_scheduler, transcription_svc) =
                 tauri::async_runtime::block_on(async move {
                     let db = AppDatabase::connect(&db_path)
                         .await
                         .expect("failed to initialize XakuStudio SQLite database");
+                    let _ = sink.db.set(db.clone());
                     let preview_server = MediaPreviewServer::start()
                         .await
                         .expect("failed to start local media preview server");
@@ -93,7 +125,18 @@ pub fn run() {
                     .await
                     .expect("failed to initialize task scheduler");
 
-                    (db, preview_server, sys_res, download_mgr, task_scheduler)
+                    let transcription_svc =
+                        TranscriptionService::new(db.clone(), Arc::clone(&task_scheduler));
+                    transcription_svc.register_handlers().await;
+
+                    (
+                        db,
+                        preview_server,
+                        sys_res,
+                        download_mgr,
+                        task_scheduler,
+                        transcription_svc,
+                    )
                 });
 
             info!(
@@ -103,16 +146,18 @@ pub fn run() {
                 "Initialized resource-aware task scheduler"
             );
 
-            let project_manager = Arc::new(ProjectManager::new(db, preview_server));
+            let project_manager = Arc::new(ProjectManager::new(db.clone(), preview_server));
             let pm_init = Arc::clone(&project_manager);
             tauri::async_runtime::spawn(async move {
                 if let Err(err) = pm_init.register_existing_assets().await {
                     error!("Failed to register existing media assets: {err}");
                 }
             });
+            app.manage(db);
             app.manage(project_manager);
             app.manage(download_mgr);
             app.manage(task_scheduler);
+            app.manage(transcription_svc);
 
             tauri::async_runtime::spawn(async move {
                 info!("Starting persistent Python AI worker");
@@ -151,6 +196,15 @@ pub fn run() {
             commands::scheduler::pause_asset_download,
             commands::scheduler::resume_asset_download,
             commands::scheduler::cancel_asset_download,
+            commands::transcription::start_transcription,
+            commands::transcription::get_transcript,
+            commands::transcription::update_segment_text,
+            commands::transcription::update_segment_speaker,
+            commands::transcription::create_speaker,
+            commands::transcription::rename_speaker,
+            commands::transcription::set_speaker_voice_presentation,
+            commands::transcription::merge_speakers,
+            commands::transcription::split_segment,
         ])
         .build(tauri::generate_context!())
         .expect("error while building XakuStudio Tauri application")
