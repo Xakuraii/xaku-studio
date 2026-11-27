@@ -14,7 +14,7 @@ from typing import Any, TextIO
 
 from xakustudio.core.capabilities import probe_capabilities
 from xakustudio.core.errors import CancelledError, ProviderUnavailableError, WorkerError
-from xakustudio.providers.base import ProviderRegistry
+from xakustudio.providers import build_default_registry
 from xakustudio.worker.protocol import (
     INTERNAL_ERROR,
     INVALID_PARAMS,
@@ -62,6 +62,42 @@ def _handle_self_test(payload: dict[str, Any], ctx: TaskContext) -> dict[str, An
     }
 
 
+def _lazy_stt(payload: dict[str, Any], ctx: TaskContext) -> dict[str, Any]:
+    from xakustudio.transcription.whisper_provider import handle_transcribe
+
+    return handle_transcribe(payload, ctx)
+
+
+def _lazy_diarize(payload: dict[str, Any], ctx: TaskContext) -> dict[str, Any]:
+    from xakustudio.diarization.pyannote_provider import handle_diarize
+
+    return handle_diarize(payload, ctx)
+
+
+def _lazy_voice_analyze(payload: dict[str, Any], ctx: TaskContext) -> dict[str, Any]:
+    from xakustudio.voices.analysis import handle_voice_analyze
+
+    return handle_voice_analyze(payload, ctx)
+
+
+def _lazy_translate(payload: dict[str, Any], ctx: TaskContext) -> dict[str, Any]:
+    from xakustudio.translation.gemini_provider import handle_translate
+
+    return handle_translate(payload, ctx)
+
+
+def _lazy_tts_synthesize(payload: dict[str, Any], ctx: TaskContext) -> dict[str, Any]:
+    from xakustudio.voices.edge_tts_provider import handle_tts_synthesize
+
+    return handle_tts_synthesize(payload, ctx)
+
+
+def _lazy_tts_list_voices(payload: dict[str, Any], ctx: TaskContext) -> dict[str, Any]:
+    from xakustudio.voices.edge_tts_provider import handle_list_voices
+
+    return handle_list_voices(payload, ctx)
+
+
 class WorkerServer:
     """Reads NDJSON JSON-RPC requests from stdin and dispatches handlers."""
 
@@ -74,7 +110,7 @@ class WorkerServer:
         self._in = in_stream or sys.stdin
         self._transport = JsonRpcTransport(out_stream)
         self._logger = StderrLogger(err_stream)
-        self._registry = ProviderRegistry()
+        self._registry = build_default_registry()
         self._started_at = time.monotonic()
         self._shutdown_event = threading.Event()
         self._tasks_lock = threading.Lock()
@@ -83,6 +119,12 @@ class WorkerServer:
         self._loaded_models: set[str] = set()
         self._task_handlers: dict[str, TaskHandler] = {
             "system.self_test": _handle_self_test,
+            "stt.transcribe": _lazy_stt,
+            "diarization.run": _lazy_diarize,
+            "voice.analyze": _lazy_voice_analyze,
+            "translation.run": _lazy_translate,
+            "tts.synthesize": _lazy_tts_synthesize,
+            "tts.list_voices": _lazy_tts_list_voices,
         }
 
     def register_task_handler(self, task_type: str, handler: TaskHandler) -> None:
@@ -280,6 +322,12 @@ class WorkerServer:
             self._loaded_models.discard(model_id)
         else:
             self._loaded_models.clear()
+
+        from xakustudio.diarization.pyannote_provider import unload_all as unload_diar
+        from xakustudio.transcription.whisper_provider import unload_all as unload_stt
+
+        unload_stt()
+        unload_diar()
 
         cuda_cleared = False
         try:

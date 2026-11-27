@@ -140,3 +140,139 @@ export interface ProjectSummary {
   inspection: MediaInspection | null;
   waveform_peaks: number[] | null;
 }
+
+export interface SystemResourceInfo {
+  cpu_threads: number;
+  gpu_name: string | null;
+  vram_total_mb: number | null;
+  vram_used_mb: number | null;
+  vram_free_mb: number | null;
+  recommended_preset: string;
+  gpu_heavy_slots: number;
+  cpu_light_slots: number;
+  network_io_slots: number;
+}
+
+export interface ProviderCatalogEntry {
+  provider_id: string;
+  name: string;
+  version: string;
+  capability: string;
+  supported_languages: string[];
+  required_hardware: string;
+  is_local: boolean;
+  requires_credential: boolean;
+  credential_key: string | null;
+  credential_configured: boolean;
+  license: string;
+  available: boolean;
+  notes: string;
+}
+
+export interface TaskRecord {
+  id: string;
+  project_id: string | null;
+  pipeline_run_id: string | null;
+  task_type: string;
+  resource_class: string;
+  status: string;
+  progress: number;
+  stage_message: string;
+  input_json: string;
+  output_json: string;
+  error_code: string | null;
+  error_message: string | null;
+  retry_count: number;
+  max_retries: number;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+}
+
+export interface DownloadRecord {
+  id: string;
+  resource_type: string;
+  resource_id: string;
+  url: string;
+  dest_path: string;
+  total_bytes: number | null;
+  downloaded_bytes: number;
+  sha256_expected: string | null;
+  status: string;
+  error_message: string | null;
+  updated_at: string;
+}
+
+export interface SpeakerRecord {
+  id: string;
+  project_id: string;
+  diarization_label: string;
+  display_name: string;
+  voice_gender_est: string;
+  gender_confidence: number;
+  pitch_hz_avg: number | null;
+  voice_provider_id: string | null;
+  voice_id: string | null;
+  voice_settings_json: string;
+  is_user_overridden: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DialogueSegmentRecord {
+  id: string;
+  project_id: string;
+  segment_index: number;
+  speaker_id: string | null;
+  start_ms: number;
+  end_ms: number;
+  source_text: string;
+  source_text_original: string;
+  words_json: string;
+  emotion_est: string;
+  emotion_confidence: number;
+  translated_text: string;
+  translated_text_auto: string;
+  translation_status: string;
+  tts_provider_id: string | null;
+  tts_voice_id: string | null;
+  tts_audio_path: string | null;
+  tts_duration_ms: number | null;
+  sync_mode: string;
+  speed_ratio: number;
+  gain_db: number;
+  updated_at: string;
+}
+
+export interface TranscriptPayload {
+  segments: DialogueSegmentRecord[];
+  speakers: SpeakerRecord[];
+  latest_run_tasks: TaskRecord[];
+}
+
+export interface GlossaryEntryRecord {
+  id: string;
+  project_id: string | null;
+  source_term: string;
+  target_term: string;
+  notes: string;
+}
+
+export interface VoicePreset {
+  provider_id: string;
+  voice_id: string;
+  display_name: string;
+  language: string;
+  gender_presentation: string;
+  supports_rate: boolean;
+  supports_pitch: boolean;
+  requires_authorization: boolean;
+  notes: string;
+}
+
+export interface VoicePreviewResult {
+  asset_id: string;
+  preview_url: string;
+  duration_ms: number;
+  voice_id: string;
+}

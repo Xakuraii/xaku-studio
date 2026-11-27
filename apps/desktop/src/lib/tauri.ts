@@ -1,11 +1,21 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
+  DialogueSegmentRecord,
+  DownloadRecord,
+  GlossaryEntryRecord,
   MediaEngineStatus,
   ProjectRecord,
   ProjectSummary,
+  ProviderCatalogEntry,
   SelfTestResult,
+  SpeakerRecord,
+  SystemResourceInfo,
   TaskProgressEvent,
+  TaskRecord,
+  TranscriptPayload,
+  VoicePreset,
+  VoicePreviewResult,
   WorkerStatus,
 } from "@xakustudio/shared";
 
@@ -95,6 +105,286 @@ export async function importProjectMedia(
     projectId,
     sourceFile,
   });
+}
+
+export async function getSystemResources(): Promise<SystemResourceInfo> {
+  return invoke<SystemResourceInfo>("get_system_resources");
+}
+
+export async function listProvidersStatus(): Promise<ProviderCatalogEntry[]> {
+  return invoke<ProviderCatalogEntry[]>("list_providers_status");
+}
+
+export async function setProviderCredential(
+  keyName: string,
+  secret: string
+): Promise<void> {
+  return invoke<void>("set_provider_credential", { keyName, secret });
+}
+
+export async function deleteProviderCredential(keyName: string): Promise<void> {
+  return invoke<void>("delete_provider_credential", { keyName });
+}
+
+export async function listScheduledTasks(
+  projectId?: string
+): Promise<TaskRecord[]> {
+  return invoke<TaskRecord[]>("list_scheduled_tasks", {
+    projectId: projectId ?? null,
+  });
+}
+
+export async function enqueueDiagnosticDag(
+  projectId?: string
+): Promise<TaskRecord[]> {
+  return invoke<TaskRecord[]>("enqueue_diagnostic_dag", {
+    projectId: projectId ?? null,
+  });
+}
+
+export async function cancelScheduledTask(taskId: string): Promise<boolean> {
+  return invoke<boolean>("cancel_scheduled_task", { taskId });
+}
+
+export async function retryScheduledTask(taskId: string): Promise<TaskRecord> {
+  return invoke<TaskRecord>("retry_scheduled_task", { taskId });
+}
+
+export async function listDownloads(): Promise<DownloadRecord[]> {
+  return invoke<DownloadRecord[]>("list_downloads");
+}
+
+export async function startAssetDownload(input: {
+  resourceType: string;
+  resourceId: string;
+  url: string;
+  fileName: string;
+  sha256Expected?: string | null;
+}): Promise<DownloadRecord> {
+  return invoke<DownloadRecord>("start_asset_download", {
+    resourceType: input.resourceType,
+    resourceId: input.resourceId,
+    url: input.url,
+    fileName: input.fileName,
+    sha256Expected: input.sha256Expected ?? null,
+  });
+}
+
+export async function pauseAssetDownload(downloadId: string): Promise<boolean> {
+  return invoke<boolean>("pause_asset_download", { downloadId });
+}
+
+export async function resumeAssetDownload(
+  downloadId: string
+): Promise<DownloadRecord> {
+  return invoke<DownloadRecord>("resume_asset_download", { downloadId });
+}
+
+export async function cancelAssetDownload(downloadId: string): Promise<boolean> {
+  return invoke<boolean>("cancel_asset_download", { downloadId });
+}
+
+export async function startTranscription(
+  projectId: string,
+  modelSize?: string
+): Promise<TaskRecord[]> {
+  return invoke<TaskRecord[]>("start_transcription", {
+    projectId,
+    modelSize: modelSize ?? null,
+  });
+}
+
+export async function getTranscript(
+  projectId: string
+): Promise<TranscriptPayload> {
+  return invoke<TranscriptPayload>("get_transcript", { projectId });
+}
+
+export async function updateSegmentText(
+  segmentId: string,
+  sourceText: string
+): Promise<DialogueSegmentRecord> {
+  return invoke<DialogueSegmentRecord>("update_segment_text", {
+    segmentId,
+    sourceText,
+  });
+}
+
+export async function updateSegmentSpeaker(
+  segmentId: string,
+  speakerId: string | null
+): Promise<DialogueSegmentRecord> {
+  return invoke<DialogueSegmentRecord>("update_segment_speaker", {
+    segmentId,
+    speakerId,
+  });
+}
+
+export async function createSpeaker(
+  projectId: string,
+  displayName: string
+): Promise<SpeakerRecord> {
+  return invoke<SpeakerRecord>("create_speaker", { projectId, displayName });
+}
+
+export async function renameSpeaker(
+  speakerId: string,
+  displayName: string
+): Promise<SpeakerRecord> {
+  return invoke<SpeakerRecord>("rename_speaker", { speakerId, displayName });
+}
+
+export async function setSpeakerVoicePresentation(
+  speakerId: string,
+  voiceGenderEst: "masculine" | "feminine" | "uncertain"
+): Promise<SpeakerRecord> {
+  return invoke<SpeakerRecord>("set_speaker_voice_presentation", {
+    speakerId,
+    voiceGenderEst,
+  });
+}
+
+export async function mergeSpeakers(
+  sourceSpeakerId: string,
+  targetSpeakerId: string
+): Promise<void> {
+  return invoke<void>("merge_speakers", {
+    sourceSpeakerId,
+    targetSpeakerId,
+  });
+}
+
+export async function splitSegment(
+  segmentId: string,
+  charIndex: number
+): Promise<DialogueSegmentRecord[]> {
+  return invoke<DialogueSegmentRecord[]>("split_segment", {
+    segmentId,
+    charIndex,
+  });
+}
+
+export async function startTranslation(input: {
+  projectId: string;
+  segmentIds?: string[];
+  sceneContext?: string;
+  model?: string;
+}): Promise<TaskRecord[]> {
+  return invoke<TaskRecord[]>("start_translation", {
+    projectId: input.projectId,
+    segmentIds: input.segmentIds ?? null,
+    sceneContext: input.sceneContext ?? null,
+    model: input.model ?? null,
+  });
+}
+
+export async function updateSegmentTranslation(
+  segmentId: string,
+  translatedText: string
+): Promise<DialogueSegmentRecord> {
+  return invoke<DialogueSegmentRecord>("update_segment_translation", {
+    segmentId,
+    translatedText,
+  });
+}
+
+export async function listGlossary(
+  projectId?: string
+): Promise<GlossaryEntryRecord[]> {
+  return invoke<GlossaryEntryRecord[]>("list_glossary", {
+    projectId: projectId ?? null,
+  });
+}
+
+export async function upsertGlossaryEntry(input: {
+  id?: string;
+  projectId?: string | null;
+  sourceTerm: string;
+  targetTerm: string;
+  notes?: string;
+}): Promise<GlossaryEntryRecord> {
+  return invoke<GlossaryEntryRecord>("upsert_glossary_entry", {
+    id: input.id ?? null,
+    projectId: input.projectId ?? null,
+    sourceTerm: input.sourceTerm,
+    targetTerm: input.targetTerm,
+    notes: input.notes ?? null,
+  });
+}
+
+export async function deleteGlossaryEntry(id: string): Promise<void> {
+  return invoke<void>("delete_glossary_entry", { id });
+}
+
+export async function listTtsVoices(): Promise<VoicePreset[]> {
+  return invoke<VoicePreset[]>("list_tts_voices");
+}
+
+export async function assignSpeakerVoice(input: {
+  speakerId: string;
+  voiceProviderId: string;
+  voiceId: string;
+  voiceSettingsJson: string;
+}): Promise<SpeakerRecord> {
+  return invoke<SpeakerRecord>("assign_speaker_voice", {
+    speakerId: input.speakerId,
+    voiceProviderId: input.voiceProviderId,
+    voiceId: input.voiceId,
+    voiceSettingsJson: input.voiceSettingsJson,
+  });
+}
+
+export async function previewTtsVoice(input: {
+  text: string;
+  voiceId: string;
+  speedRatio?: number;
+  pitchHzDelta?: number;
+}): Promise<VoicePreviewResult> {
+  return invoke<VoicePreviewResult>("preview_tts_voice", {
+    text: input.text,
+    voiceId: input.voiceId,
+    speedRatio: input.speedRatio ?? 1.0,
+    pitchHzDelta: input.pitchHzDelta ?? 0,
+  });
+}
+
+export async function synthesizeProjectTts(
+  projectId: string
+): Promise<TaskRecord[]> {
+  return invoke<TaskRecord[]>("synthesize_project_tts", { projectId });
+}
+
+export async function synthesizeSegmentTts(
+  segmentId: string
+): Promise<DialogueSegmentRecord> {
+  return invoke<DialogueSegmentRecord>("synthesize_segment_tts", { segmentId });
+}
+
+export async function getSegmentAudioUrls(
+  projectId: string
+): Promise<Record<string, string>> {
+  return invoke<Record<string, string>>("get_segment_audio_urls", {
+    projectId,
+  });
+}
+
+export async function subscribeSchedulerEvents(
+  onTaskUpdated: (task: TaskRecord) => void,
+  onDownloadUpdated: (download: DownloadRecord) => void
+): Promise<UnlistenFn> {
+  if (!isTauriRuntime()) {
+    return () => {};
+  }
+  const u1 = await listen<TaskRecord>("scheduler:task-updated", (e) => {
+    onTaskUpdated(e.payload);
+  });
+  const u2 = await listen<DownloadRecord>("download:updated", (e) => {
+    onDownloadUpdated(e.payload);
+  });
+  return () => {
+    u1();
+    u2();
+  };
 }
 
 export async function subscribeWorkerEvents(

@@ -25,6 +25,7 @@ pub struct WorkerConfig {
     pub python_executable: PathBuf,
     pub working_dir: PathBuf,
     pub request_timeout: Duration,
+    pub env: Vec<(String, String)>,
 }
 
 impl WorkerConfig {
@@ -60,6 +61,7 @@ impl WorkerConfig {
             python_executable,
             working_dir: repo_root,
             request_timeout: Duration::from_secs(30),
+            env: Vec::new(),
         }
     }
 }
@@ -155,6 +157,10 @@ impl WorkerManager {
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
+
+        for (k, v) in &self.config.env {
+            cmd.env(k, v);
+        }
 
         #[cfg(windows)]
         {
@@ -352,6 +358,16 @@ impl WorkerManager {
     }
 
     pub async fn call_rpc(&self, method: &str, params: Value) -> Result<Value, JsonRpcError> {
+        self.call_rpc_with_timeout(method, params, Some(self.config.request_timeout))
+            .await
+    }
+
+    pub async fn call_rpc_with_timeout(
+        &self,
+        method: &str,
+        params: Value,
+        timeout: Option<Duration>,
+    ) -> Result<Value, JsonRpcError> {
         let req_id = Uuid::new_v4().to_string();
         let req = JsonRpcRequest::new(req_id.clone(), method, params);
         let line = serde_json::to_string(&req).map_err(|e| JsonRpcError {
@@ -394,22 +410,32 @@ impl WorkerManager {
             });
         }
 
-        match tokio::time::timeout(self.config.request_timeout, rx).await {
-            Ok(Ok(res)) => res,
-            Ok(Err(_)) => Err(JsonRpcError {
-                code: -32000,
-                message: "Worker response channel closed".to_string(),
-                data: None,
-            }),
-            Err(_) => {
-                let mut pending = self.pending.lock().await;
-                pending.remove(&req_id);
-                Err(JsonRpcError {
+        match timeout {
+            Some(dur) => match tokio::time::timeout(dur, rx).await {
+                Ok(Ok(res)) => res,
+                Ok(Err(_)) => Err(JsonRpcError {
                     code: -32000,
-                    message: format!("Worker request '{method}' timed out"),
+                    message: "Worker response channel closed".to_string(),
                     data: None,
-                })
-            }
+                }),
+                Err(_) => {
+                    let mut pending = self.pending.lock().await;
+                    pending.remove(&req_id);
+                    Err(JsonRpcError {
+                        code: -32000,
+                        message: format!("Worker request '{method}' timed out"),
+                        data: None,
+                    })
+                }
+            },
+            None => match rx.await {
+                Ok(res) => res,
+                Err(_) => Err(JsonRpcError {
+                    code: -32000,
+                    message: "Worker response channel closed".to_string(),
+                    data: None,
+                }),
+            },
         }
     }
 
