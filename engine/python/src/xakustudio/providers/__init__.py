@@ -8,10 +8,12 @@ from xakustudio.providers.base import ProviderMetadata, ProviderRegistry
 
 
 def build_default_registry() -> ProviderRegistry:
-    """Register Stage 4 AI providers with live package availability."""
+    """Register Stage 4–5 AI providers with live package availability."""
     registry = ProviderRegistry()
     fw_ok = importlib.util.find_spec("faster_whisper") is not None
     pyannote_ok = importlib.util.find_spec("pyannote.audio") is not None
+    genai_ok = importlib.util.find_spec("google.genai") is not None
+    edge_tts_ok = importlib.util.find_spec("edge_tts") is not None
 
     registry.register(
         ProviderMetadata(
@@ -58,6 +60,38 @@ def build_default_registry() -> ProviderRegistry:
             requires_credential=False,
             license="MIT",
             available=True,
+        )
+    )
+    registry.register(
+        ProviderMetadata(
+            provider_id="gemini-translation",
+            name="Gemini Context-Aware Translation",
+            version="3.6.1",
+            capability="translation",
+            supported_languages=["zh->km", "zh->en", "en->km", "km->en"],
+            supported_features=["character_context", "glossary", "structured_output"],
+            required_hardware="Cloud API",
+            is_local=False,
+            requires_credential=True,
+            license="Google Gemini API Terms",
+            available=genai_ok,
+            unavailable_reason=None if genai_ok else "google-genai package not installed",
+        )
+    )
+    registry.register(
+        ProviderMetadata(
+            provider_id="edge-neural-tts",
+            name="Neural Khmer TTS (Piseth / Sreymom)",
+            version="7.3.1",
+            capability="tts",
+            supported_languages=["km", "en"],
+            supported_features=["rate_control", "pitch_control", "multi_voice"],
+            required_hardware="Cloud API",
+            is_local=False,
+            requires_credential=False,
+            license="Microsoft Neural Speech / Edge TTS",
+            available=edge_tts_ok,
+            unavailable_reason=None if edge_tts_ok else "edge-tts package not installed",
         )
     )
     return registry

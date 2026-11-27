@@ -80,6 +80,24 @@ def _lazy_voice_analyze(payload: dict[str, Any], ctx: TaskContext) -> dict[str, 
     return handle_voice_analyze(payload, ctx)
 
 
+def _lazy_translate(payload: dict[str, Any], ctx: TaskContext) -> dict[str, Any]:
+    from xakustudio.translation.gemini_provider import handle_translate
+
+    return handle_translate(payload, ctx)
+
+
+def _lazy_tts_synthesize(payload: dict[str, Any], ctx: TaskContext) -> dict[str, Any]:
+    from xakustudio.voices.edge_tts_provider import handle_tts_synthesize
+
+    return handle_tts_synthesize(payload, ctx)
+
+
+def _lazy_tts_list_voices(payload: dict[str, Any], ctx: TaskContext) -> dict[str, Any]:
+    from xakustudio.voices.edge_tts_provider import handle_list_voices
+
+    return handle_list_voices(payload, ctx)
+
+
 class WorkerServer:
     """Reads NDJSON JSON-RPC requests from stdin and dispatches handlers."""
 
@@ -104,6 +122,9 @@ class WorkerServer:
             "stt.transcribe": _lazy_stt,
             "diarization.run": _lazy_diarize,
             "voice.analyze": _lazy_voice_analyze,
+            "translation.run": _lazy_translate,
+            "tts.synthesize": _lazy_tts_synthesize,
+            "tts.list_voices": _lazy_tts_list_voices,
         }
 
     def register_task_handler(self, task_type: str, handler: TaskHandler) -> None:
