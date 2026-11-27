@@ -1,7 +1,10 @@
 pub mod commands;
 pub mod core;
 pub mod database;
+pub mod downloads;
 pub mod media;
+pub mod resources;
+pub mod scheduler;
 pub mod worker;
 
 use std::sync::Arc;
@@ -12,7 +15,10 @@ use tracing_subscriber::EnvFilter;
 
 use core::projects::ProjectManager;
 use database::AppDatabase;
+use downloads::DownloadManager;
 use media::preview_server::MediaPreviewServer;
+use resources::probe_system_resources;
+use scheduler::TaskScheduler;
 use worker::protocol::{TaskProgressEvent, WorkerStatus};
 use worker::{WorkerConfig, WorkerEventSink, WorkerManager};
 
@@ -47,15 +53,55 @@ pub fn run() {
                 .expect("failed to resolve Tauri app data directory");
             let db_path = app_data_dir.join("xakustudio.db");
 
-            let (db, preview_server) = tauri::async_runtime::block_on(async {
-                let db = AppDatabase::connect(&db_path)
-                    .await
-                    .expect("failed to initialize XakuStudio SQLite database");
-                let preview_server = MediaPreviewServer::start()
-                    .await
-                    .expect("failed to start local media preview server");
-                (db, preview_server)
+            let sink = Arc::new(TauriWorkerEventSink {
+                app: app.handle().clone(),
             });
+            let worker = WorkerManager::new(WorkerConfig::discover_default(), sink);
+            app.manage(Arc::clone(&worker));
+
+            let app_handle_dl = app.handle().clone();
+            let app_handle_sched = app.handle().clone();
+            let worker_for_sched = Arc::clone(&worker);
+
+            let (db, preview_server, sys_res, download_mgr, task_scheduler) =
+                tauri::async_runtime::block_on(async move {
+                    let db = AppDatabase::connect(&db_path)
+                        .await
+                        .expect("failed to initialize XakuStudio SQLite database");
+                    let preview_server = MediaPreviewServer::start()
+                        .await
+                        .expect("failed to start local media preview server");
+                    let sys_res = probe_system_resources().await;
+
+                    let download_mgr = DownloadManager::new(
+                        db.clone(),
+                        Arc::new(move |dl| {
+                            let _ = app_handle_dl.emit("download:updated", dl);
+                        }),
+                    );
+
+                    let task_scheduler = TaskScheduler::start(
+                        db.clone(),
+                        worker_for_sched,
+                        sys_res.gpu_heavy_slots,
+                        sys_res.cpu_light_slots,
+                        sys_res.network_io_slots,
+                        Arc::new(move |task| {
+                            let _ = app_handle_sched.emit("scheduler:task-updated", task);
+                        }),
+                    )
+                    .await
+                    .expect("failed to initialize task scheduler");
+
+                    (db, preview_server, sys_res, download_mgr, task_scheduler)
+                });
+
+            info!(
+                gpu_slots = sys_res.gpu_heavy_slots,
+                cpu_slots = sys_res.cpu_light_slots,
+                preset = %sys_res.recommended_preset,
+                "Initialized resource-aware task scheduler"
+            );
 
             let project_manager = Arc::new(ProjectManager::new(db, preview_server));
             let pm_init = Arc::clone(&project_manager);
@@ -65,12 +111,8 @@ pub fn run() {
                 }
             });
             app.manage(project_manager);
-
-            let sink = Arc::new(TauriWorkerEventSink {
-                app: app.handle().clone(),
-            });
-            let worker = WorkerManager::new(WorkerConfig::discover_default(), sink);
-            app.manage(Arc::clone(&worker));
+            app.manage(download_mgr);
+            app.manage(task_scheduler);
 
             tauri::async_runtime::spawn(async move {
                 info!("Starting persistent Python AI worker");
@@ -96,6 +138,19 @@ pub fn run() {
             commands::projects::rename_project,
             commands::projects::delete_project,
             commands::projects::import_project_media,
+            commands::scheduler::get_system_resources,
+            commands::scheduler::list_providers_status,
+            commands::scheduler::set_provider_credential,
+            commands::scheduler::delete_provider_credential,
+            commands::scheduler::list_scheduled_tasks,
+            commands::scheduler::enqueue_diagnostic_dag,
+            commands::scheduler::cancel_scheduled_task,
+            commands::scheduler::retry_scheduled_task,
+            commands::scheduler::list_downloads,
+            commands::scheduler::start_asset_download,
+            commands::scheduler::pause_asset_download,
+            commands::scheduler::resume_asset_download,
+            commands::scheduler::cancel_asset_download,
         ])
         .build(tauri::generate_context!())
         .expect("error while building XakuStudio Tauri application")
