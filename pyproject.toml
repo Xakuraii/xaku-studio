@@ -5,7 +5,23 @@ description = "XakuStudio Python 3.12.10 AI Worker Engine"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 license = { text = "MIT" }
-dependencies = []
+dependencies = [
+  "numpy>=2.1",
+  "faster-whisper>=1.2,<2",
+  "pyannote.audio>=4.0,<5",
+  "torch==2.9.1",
+  "torchaudio==2.9.1",
+  "torchcodec>=0.8,<0.10",
+]
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
+torchaudio = { index = "pytorch-cu128" }
 
 [dependency-groups]
 dev = [
@@ -23,6 +39,8 @@ packages = ["engine/python/src/xakustudio"]
 [tool.pytest.ini_options]
 testpaths = ["engine/python/tests"]
 pythonpath = ["engine/python/src"]
+markers = ["slow: downloads models / runs real inference"]
+addopts = "-m 'not slow'"
 
 [tool.ruff]
 line-length = 100
