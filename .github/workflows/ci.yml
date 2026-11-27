@@ -1,0 +1,70 @@
+name: XakuStudio CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  frontend-and-python:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install JS dependencies
+        run: npm ci
+
+      - name: TypeScript & Vitest & Build
+        run: |
+          npm run typecheck
+          npm test
+          npm run build
+
+      - name: Set up uv & Python 3.12.10
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12.10"
+
+      - name: Sync Python engine (CPU/base check)
+        run: uv sync --locked --no-install-project
+
+      - name: Python lint & unit/protocol tests
+        run: |
+          uv run ruff check engine/python
+          uv run pytest -v
+
+  rust-core:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Build frontend dist for Tauri context
+        run: |
+          npm ci
+          npm run build
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12.10"
+
+      - name: Check & test Rust core
+        run: |
+          cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml
+          cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --no-run
