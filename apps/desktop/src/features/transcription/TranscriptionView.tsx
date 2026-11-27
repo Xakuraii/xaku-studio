@@ -4,6 +4,7 @@ import type { DialogueSegmentRecord, SpeakerRecord } from "@xakustudio/shared";
 import {
   AlertTriangle,
   GitMerge,
+  Languages,
   Play,
   Plus,
   Scissors,
@@ -13,6 +14,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { TranslationPanel } from "@/features/translation/TranslationPanel";
 import {
   createSpeaker,
   getTranscript,
@@ -62,6 +64,9 @@ export function TranscriptionView() {
   const setActiveProjectId = useAppStore((s) => s.setActiveProjectId);
   const setActiveSection = useAppStore((s) => s.setActiveSection);
 
+  const [modeTab, setModeTab] = useState<"transcript" | "translation">(
+    "transcript"
+  );
   const [modelSize, setModelSize] = useState("auto");
   const [newSpeakerName, setNewSpeakerName] = useState("");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -405,6 +410,33 @@ export function TranscriptionView() {
         </Card>
       )}
 
+      <div className="flex items-center gap-2 border-b border-border pb-2">
+        <Button
+          size="sm"
+          variant={modeTab === "transcript" ? "default" : "ghost"}
+          onClick={() => setModeTab("transcript")}
+        >
+          <UserCheck className="h-3.5 w-3.5" />
+          Transcript & Speakers
+        </Button>
+        <Button
+          size="sm"
+          variant={modeTab === "translation" ? "default" : "ghost"}
+          onClick={() => setModeTab("translation")}
+        >
+          <Languages className="h-3.5 w-3.5" />
+          Translation & Glossary
+        </Button>
+      </div>
+
+      {modeTab === "translation" ? (
+        <TranslationPanel
+          projectId={activeProjectId}
+          segments={segments}
+          speakers={speakers}
+          isRunning={isRunning}
+        />
+      ) : (
       <div className="grid gap-6 lg:grid-cols-12">
         <Card className="lg:col-span-4">
           <CardHeader>
@@ -631,6 +663,7 @@ export function TranscriptionView() {
           </CardContent>
         </Card>
       </div>
+      )}
     </div>
   );
 }

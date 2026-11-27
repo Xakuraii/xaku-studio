@@ -249,3 +249,30 @@ export interface TranscriptPayload {
   speakers: SpeakerRecord[];
   latest_run_tasks: TaskRecord[];
 }
+
+export interface GlossaryEntryRecord {
+  id: string;
+  project_id: string | null;
+  source_term: string;
+  target_term: string;
+  notes: string;
+}
+
+export interface VoicePreset {
+  provider_id: string;
+  voice_id: string;
+  display_name: string;
+  language: string;
+  gender_presentation: string;
+  supports_rate: boolean;
+  supports_pitch: boolean;
+  requires_authorization: boolean;
+  notes: string;
+}
+
+export interface VoicePreviewResult {
+  asset_id: string;
+  preview_url: string;
+  duration_ms: number;
+  voice_id: string;
+}

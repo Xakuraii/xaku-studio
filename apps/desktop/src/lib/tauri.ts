@@ -3,6 +3,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   DialogueSegmentRecord,
   DownloadRecord,
+  GlossaryEntryRecord,
   MediaEngineStatus,
   ProjectRecord,
   ProjectSummary,
@@ -13,6 +14,8 @@ import type {
   TaskProgressEvent,
   TaskRecord,
   TranscriptPayload,
+  VoicePreset,
+  VoicePreviewResult,
   WorkerStatus,
 } from "@xakustudio/shared";
 
@@ -258,6 +261,110 @@ export async function splitSegment(
   return invoke<DialogueSegmentRecord[]>("split_segment", {
     segmentId,
     charIndex,
+  });
+}
+
+export async function startTranslation(input: {
+  projectId: string;
+  segmentIds?: string[];
+  sceneContext?: string;
+  model?: string;
+}): Promise<TaskRecord[]> {
+  return invoke<TaskRecord[]>("start_translation", {
+    projectId: input.projectId,
+    segmentIds: input.segmentIds ?? null,
+    sceneContext: input.sceneContext ?? null,
+    model: input.model ?? null,
+  });
+}
+
+export async function updateSegmentTranslation(
+  segmentId: string,
+  translatedText: string
+): Promise<DialogueSegmentRecord> {
+  return invoke<DialogueSegmentRecord>("update_segment_translation", {
+    segmentId,
+    translatedText,
+  });
+}
+
+export async function listGlossary(
+  projectId?: string
+): Promise<GlossaryEntryRecord[]> {
+  return invoke<GlossaryEntryRecord[]>("list_glossary", {
+    projectId: projectId ?? null,
+  });
+}
+
+export async function upsertGlossaryEntry(input: {
+  id?: string;
+  projectId?: string | null;
+  sourceTerm: string;
+  targetTerm: string;
+  notes?: string;
+}): Promise<GlossaryEntryRecord> {
+  return invoke<GlossaryEntryRecord>("upsert_glossary_entry", {
+    id: input.id ?? null,
+    projectId: input.projectId ?? null,
+    sourceTerm: input.sourceTerm,
+    targetTerm: input.targetTerm,
+    notes: input.notes ?? null,
+  });
+}
+
+export async function deleteGlossaryEntry(id: string): Promise<void> {
+  return invoke<void>("delete_glossary_entry", { id });
+}
+
+export async function listTtsVoices(): Promise<VoicePreset[]> {
+  return invoke<VoicePreset[]>("list_tts_voices");
+}
+
+export async function assignSpeakerVoice(input: {
+  speakerId: string;
+  voiceProviderId: string;
+  voiceId: string;
+  voiceSettingsJson: string;
+}): Promise<SpeakerRecord> {
+  return invoke<SpeakerRecord>("assign_speaker_voice", {
+    speakerId: input.speakerId,
+    voiceProviderId: input.voiceProviderId,
+    voiceId: input.voiceId,
+    voiceSettingsJson: input.voiceSettingsJson,
+  });
+}
+
+export async function previewTtsVoice(input: {
+  text: string;
+  voiceId: string;
+  speedRatio?: number;
+  pitchHzDelta?: number;
+}): Promise<VoicePreviewResult> {
+  return invoke<VoicePreviewResult>("preview_tts_voice", {
+    text: input.text,
+    voiceId: input.voiceId,
+    speedRatio: input.speedRatio ?? 1.0,
+    pitchHzDelta: input.pitchHzDelta ?? 0,
+  });
+}
+
+export async function synthesizeProjectTts(
+  projectId: string
+): Promise<TaskRecord[]> {
+  return invoke<TaskRecord[]>("synthesize_project_tts", { projectId });
+}
+
+export async function synthesizeSegmentTts(
+  segmentId: string
+): Promise<DialogueSegmentRecord> {
+  return invoke<DialogueSegmentRecord>("synthesize_segment_tts", { segmentId });
+}
+
+export async function getSegmentAudioUrls(
+  projectId: string
+): Promise<Record<string, string>> {
+  return invoke<Record<string, string>>("get_segment_audio_urls", {
+    projectId,
   });
 }
 

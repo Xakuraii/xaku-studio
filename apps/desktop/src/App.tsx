@@ -7,6 +7,7 @@ import { ModelsProvidersView } from "@/features/models/ModelsProvidersView";
 import { ProjectsView } from "@/features/projects/ProjectsView";
 import { SettingsView } from "@/features/settings/SettingsView";
 import { TranscriptionView } from "@/features/transcription/TranscriptionView";
+import { CharactersVoicesView } from "@/features/voices/CharactersVoicesView";
 import { useAppStore, type NavSection } from "@/stores/appStore";
 
 const queryClient = new QueryClient();
@@ -14,7 +15,12 @@ const queryClient = new QueryClient();
 const STAGE_DETAILS: Record<
   Exclude<
     NavSection,
-    "home" | "projects" | "auto-dubbing" | "models" | "settings"
+    | "home"
+    | "projects"
+    | "auto-dubbing"
+    | "characters"
+    | "models"
+    | "settings"
   >,
   { title: string; stage: string; description: string }
 > = {
@@ -23,12 +29,6 @@ const STAGE_DETAILS: Record<
     stage: "Stage 6 — Dialogue Sync & Segment Editing",
     description:
       "Interactive audio waveform timeline, line-level timing adjustment, and single-segment regeneration.",
-  },
-  characters: {
-    title: "Characters & Voices",
-    stage: "Stage 5 — Character Voice Studio",
-    description:
-      "Speaker profiles, estimated vocal characteristics, and per-character Khmer voice assignment.",
   },
   subtitles: {
     title: "Subtitle Studio",
@@ -62,6 +62,8 @@ function AppContent() {
             <ProjectsView />
           ) : activeSection === "auto-dubbing" ? (
             <TranscriptionView />
+          ) : activeSection === "characters" ? (
+            <CharactersVoicesView />
           ) : activeSection === "models" ? (
             <ModelsProvidersView />
           ) : activeSection === "settings" ? (
