@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main, develop]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   frontend-and-python:
     runs-on: windows-latest
@@ -41,30 +45,25 @@ jobs:
 
   rust-core:
     runs-on: windows-latest
+    env:
+      CARGO_INCREMENTAL: 0
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "24"
-          cache: npm
-
-      - name: Build frontend dist for Tauri context
+      - name: Prepare minimal frontend dist for Tauri context
+        shell: pwsh
         run: |
-          npm ci
-          npm run build
+          New-Item -ItemType Directory -Force -Path apps/desktop/dist | Out-Null
+          '<!doctype html><html><body></body></html>' | Set-Content -Path apps/desktop/dist/index.html -NoNewline
 
       - uses: dtolnay/rust-toolchain@stable
 
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: apps/desktop/src-tauri
+          cache-on-failure: true
 
-      - uses: astral-sh/setup-uv@v5
-        with:
-          python-version: "3.12.10"
-
-      - name: Check & test Rust core
+      - name: Compile Rust targets & run unit tests
         run: |
-          cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml
           cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --no-run
+          cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --lib

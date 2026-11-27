@@ -1,6 +1,6 @@
 # XakuStudio Local Agent Rules
 
-- **Primary Branch**: Work incrementally on `develop`; keep commits focused using Conventional Commits (`type(scope): description`) with `Co-authored-by: Xakuraii <hxungdxakuraii@gmail.com>` when applicable.
+- **Primary Branch**: Work incrementally on `develop`; keep commits focused using Conventional Commits (`type(scope): description`) with `Co-authored-by: Xakuraii <hxungdxakuraii@gmail.com>` and `Co-authored-by: Gemini <200291788+gemini-code-assist@users.noreply.github.com>` when applicable (keep the human developer as primary author; never rewrite existing history solely for attribution).
 - **Python Runtime**: Always use Python `3.12.10` via `uv`. Keep CUDA 12.8 (`cu128`) wheels aligned with `ctranslate2` on Windows.
 - **PowerShell Syntax**: Use `; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }` instead of `&&` on Windows PowerShell 5.1.
 - **Credentials**: Store `HF_TOKEN`, `GEMINI_API_KEY`, and `AZURE_SPEECH_KEY` only in Windows Credential Manager via `CredentialStore`; inject at execution time without persisting to SQLite.
