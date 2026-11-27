@@ -1,11 +1,15 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
+  DownloadRecord,
   MediaEngineStatus,
   ProjectRecord,
   ProjectSummary,
+  ProviderCatalogEntry,
   SelfTestResult,
+  SystemResourceInfo,
   TaskProgressEvent,
+  TaskRecord,
   WorkerStatus,
 } from "@xakustudio/shared";
 
@@ -95,6 +99,102 @@ export async function importProjectMedia(
     projectId,
     sourceFile,
   });
+}
+
+export async function getSystemResources(): Promise<SystemResourceInfo> {
+  return invoke<SystemResourceInfo>("get_system_resources");
+}
+
+export async function listProvidersStatus(): Promise<ProviderCatalogEntry[]> {
+  return invoke<ProviderCatalogEntry[]>("list_providers_status");
+}
+
+export async function setProviderCredential(
+  keyName: string,
+  secret: string
+): Promise<void> {
+  return invoke<void>("set_provider_credential", { keyName, secret });
+}
+
+export async function deleteProviderCredential(keyName: string): Promise<void> {
+  return invoke<void>("delete_provider_credential", { keyName });
+}
+
+export async function listScheduledTasks(
+  projectId?: string
+): Promise<TaskRecord[]> {
+  return invoke<TaskRecord[]>("list_scheduled_tasks", {
+    projectId: projectId ?? null,
+  });
+}
+
+export async function enqueueDiagnosticDag(
+  projectId?: string
+): Promise<TaskRecord[]> {
+  return invoke<TaskRecord[]>("enqueue_diagnostic_dag", {
+    projectId: projectId ?? null,
+  });
+}
+
+export async function cancelScheduledTask(taskId: string): Promise<boolean> {
+  return invoke<boolean>("cancel_scheduled_task", { taskId });
+}
+
+export async function retryScheduledTask(taskId: string): Promise<TaskRecord> {
+  return invoke<TaskRecord>("retry_scheduled_task", { taskId });
+}
+
+export async function listDownloads(): Promise<DownloadRecord[]> {
+  return invoke<DownloadRecord[]>("list_downloads");
+}
+
+export async function startAssetDownload(input: {
+  resourceType: string;
+  resourceId: string;
+  url: string;
+  fileName: string;
+  sha256Expected?: string | null;
+}): Promise<DownloadRecord> {
+  return invoke<DownloadRecord>("start_asset_download", {
+    resourceType: input.resourceType,
+    resourceId: input.resourceId,
+    url: input.url,
+    fileName: input.fileName,
+    sha256Expected: input.sha256Expected ?? null,
+  });
+}
+
+export async function pauseAssetDownload(downloadId: string): Promise<boolean> {
+  return invoke<boolean>("pause_asset_download", { downloadId });
+}
+
+export async function resumeAssetDownload(
+  downloadId: string
+): Promise<DownloadRecord> {
+  return invoke<DownloadRecord>("resume_asset_download", { downloadId });
+}
+
+export async function cancelAssetDownload(downloadId: string): Promise<boolean> {
+  return invoke<boolean>("cancel_asset_download", { downloadId });
+}
+
+export async function subscribeSchedulerEvents(
+  onTaskUpdated: (task: TaskRecord) => void,
+  onDownloadUpdated: (download: DownloadRecord) => void
+): Promise<UnlistenFn> {
+  if (!isTauriRuntime()) {
+    return () => {};
+  }
+  const u1 = await listen<TaskRecord>("scheduler:task-updated", (e) => {
+    onTaskUpdated(e.payload);
+  });
+  const u2 = await listen<DownloadRecord>("download:updated", (e) => {
+    onDownloadUpdated(e.payload);
+  });
+  return () => {
+    u1();
+    u2();
+  };
 }
 
 export async function subscribeWorkerEvents(

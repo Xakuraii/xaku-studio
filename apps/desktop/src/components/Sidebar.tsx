@@ -29,7 +29,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: "manual-studio", label: "Manual Studio", icon: Sliders, stageBadge: "S6" },
   { id: "characters", label: "Characters & Voices", icon: Users, stageBadge: "S5" },
   { id: "subtitles", label: "Subtitle Studio", icon: Captions, stageBadge: "S6" },
-  { id: "models", label: "Models & Providers", icon: Cpu, stageBadge: "S3" },
+  { id: "models", label: "Models & Providers", icon: Cpu },
   { id: "settings", label: "Settings", icon: Settings },
 ];
 
@@ -86,7 +86,7 @@ export function Sidebar() {
       </nav>
 
       <div className="flex items-center justify-between border-t border-border px-3 py-2.5">
-        <span className="text-[11px] text-muted-foreground">v0.1.0 · Stage 2</span>
+        <span className="text-[11px] text-muted-foreground">v0.1.0 · Stage 3</span>
         <Button
           variant="ghost"
           size="icon"

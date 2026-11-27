@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Sidebar } from "@/components/Sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { HomeDashboard } from "@/features/home/HomeDashboard";
+import { ModelsProvidersView } from "@/features/models/ModelsProvidersView";
 import { ProjectsView } from "@/features/projects/ProjectsView";
 import { SettingsView } from "@/features/settings/SettingsView";
 import { useAppStore, type NavSection } from "@/stores/appStore";
@@ -10,7 +11,7 @@ import { useAppStore, type NavSection } from "@/stores/appStore";
 const queryClient = new QueryClient();
 
 const STAGE_DETAILS: Record<
-  Exclude<NavSection, "home" | "projects" | "settings">,
+  Exclude<NavSection, "home" | "projects" | "models" | "settings">,
   { title: string; stage: string; description: string }
 > = {
   "auto-dubbing": {
@@ -37,12 +38,6 @@ const STAGE_DETAILS: Record<
     description:
       "Customizable Khmer subtitle typography (Noto Sans Khmer), positioning, and SRT/VTT/ASS export.",
   },
-  models: {
-    title: "Models & Providers",
-    stage: "Stage 3 — Provider Registry & Download Manager",
-    description:
-      "Hardware-aware provider configuration, range-resumable model downloads, and secure credential status.",
-  },
 };
 
 function AppContent() {
@@ -67,6 +62,8 @@ function AppContent() {
             <HomeDashboard />
           ) : activeSection === "projects" ? (
             <ProjectsView />
+          ) : activeSection === "models" ? (
+            <ModelsProvidersView />
           ) : activeSection === "settings" ? (
             <SettingsView />
           ) : (
