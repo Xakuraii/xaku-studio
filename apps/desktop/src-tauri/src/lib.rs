@@ -13,6 +13,7 @@ use tauri::{AppHandle, Emitter, Manager};
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 
+use core::localization::LocalizationService;
 use core::projects::ProjectManager;
 use core::transcription::TranscriptionService;
 use database::AppDatabase;
@@ -93,8 +94,10 @@ pub fn run() {
             let app_handle_dl = app.handle().clone();
             let app_handle_sched = app.handle().clone();
             let worker_for_sched = Arc::clone(&worker);
+            let worker_for_loc = Arc::clone(&worker);
+            let cache_dir_for_loc = app_data_dir.join("cache");
 
-            let (db, preview_server, sys_res, download_mgr, task_scheduler, transcription_svc) =
+            let (db, preview_server, sys_res, download_mgr, task_scheduler, transcription_svc, localization_svc) =
                 tauri::async_runtime::block_on(async move {
                     let db = AppDatabase::connect(&db_path)
                         .await
@@ -129,6 +132,15 @@ pub fn run() {
                         TranscriptionService::new(db.clone(), Arc::clone(&task_scheduler));
                     transcription_svc.register_handlers().await;
 
+                    let localization_svc = LocalizationService::new(
+                        db.clone(),
+                        Arc::clone(&task_scheduler),
+                        worker_for_loc,
+                        preview_server.clone(),
+                        cache_dir_for_loc,
+                    );
+                    localization_svc.register_handlers().await;
+
                     (
                         db,
                         preview_server,
@@ -136,6 +148,7 @@ pub fn run() {
                         download_mgr,
                         task_scheduler,
                         transcription_svc,
+                        localization_svc,
                     )
                 });
 
@@ -158,6 +171,7 @@ pub fn run() {
             app.manage(download_mgr);
             app.manage(task_scheduler);
             app.manage(transcription_svc);
+            app.manage(localization_svc);
 
             tauri::async_runtime::spawn(async move {
                 info!("Starting persistent Python AI worker");
@@ -205,6 +219,17 @@ pub fn run() {
             commands::transcription::set_speaker_voice_presentation,
             commands::transcription::merge_speakers,
             commands::transcription::split_segment,
+            commands::localization::start_translation,
+            commands::localization::update_segment_translation,
+            commands::localization::list_glossary,
+            commands::localization::upsert_glossary_entry,
+            commands::localization::delete_glossary_entry,
+            commands::localization::list_tts_voices,
+            commands::localization::assign_speaker_voice,
+            commands::localization::preview_tts_voice,
+            commands::localization::synthesize_project_tts,
+            commands::localization::synthesize_segment_tts,
+            commands::localization::get_segment_audio_urls,
         ])
         .build(tauri::generate_context!())
         .expect("error while building XakuStudio Tauri application")

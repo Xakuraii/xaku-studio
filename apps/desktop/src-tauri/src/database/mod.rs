@@ -123,6 +123,15 @@ pub struct DialogueSegmentRecord {
     pub updated_at: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct GlossaryEntryRecord {
+    pub id: String,
+    pub project_id: Option<String>,
+    pub source_term: String,
+    pub target_term: String,
+    pub notes: String,
+}
+
 #[derive(Clone)]
 pub struct AppDatabase {
     pool: SqlitePool,
@@ -1221,5 +1230,197 @@ impl AppDatabase {
             .map_err(|e| format!("Failed to commit segment split: {e}"))?;
 
         self.list_dialogue_segments(&seg.project_id).await
+    }
+
+    pub async fn list_glossary(&self, project_id: Option<&str>) -> Result<Vec<GlossaryEntryRecord>, String> {
+        match project_id {
+            Some(pid) => sqlx::query_as::<_, GlossaryEntryRecord>(
+                "SELECT * FROM glossary_entries WHERE project_id IS NULL OR project_id = ?1 ORDER BY source_term ASC",
+            )
+            .bind(pid)
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| format!("Failed to list glossary entries: {e}")),
+            None => sqlx::query_as::<_, GlossaryEntryRecord>(
+                "SELECT * FROM glossary_entries WHERE project_id IS NULL ORDER BY source_term ASC",
+            )
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| format!("Failed to list global glossary entries: {e}")),
+        }
+    }
+
+    pub async fn upsert_glossary_entry(&self, entry: &GlossaryEntryRecord) -> Result<(), String> {
+        sqlx::query(
+            r#"
+            INSERT INTO glossary_entries (id, project_id, source_term, target_term, notes)
+            VALUES (?1, ?2, ?3, ?4, ?5)
+            ON CONFLICT(id) DO UPDATE SET
+                project_id = excluded.project_id,
+                source_term = excluded.source_term,
+                target_term = excluded.target_term,
+                notes = excluded.notes
+            "#,
+        )
+        .bind(&entry.id)
+        .bind(&entry.project_id)
+        .bind(&entry.source_term)
+        .bind(&entry.target_term)
+        .bind(&entry.notes)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| format!("Failed to save glossary entry: {e}"))?;
+        Ok(())
+    }
+
+    pub async fn delete_glossary_entry(&self, id: &str) -> Result<(), String> {
+        sqlx::query("DELETE FROM glossary_entries WHERE id = ?1")
+            .bind(id)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| format!("Failed to delete glossary entry: {e}"))?;
+        Ok(())
+    }
+
+    pub async fn apply_translations(
+        &self,
+        project_id: &str,
+        items: &[(String, String)],
+    ) -> Result<(), String> {
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| format!("Failed to begin translation persistence tx: {e}"))?;
+
+        for (segment_id, translated_text) in items {
+            sqlx::query(
+                r#"
+                UPDATE dialogue_segments SET
+                    translated_text = ?1,
+                    translated_text_auto = ?1,
+                    translation_status = 'auto',
+                    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                WHERE id = ?2 AND project_id = ?3
+                "#,
+            )
+            .bind(translated_text)
+            .bind(segment_id)
+            .bind(project_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| format!("Failed to update translated segment: {e}"))?;
+        }
+
+        tx.commit()
+            .await
+            .map_err(|e| format!("Failed to commit translations: {e}"))?;
+        Ok(())
+    }
+
+    pub async fn update_segment_translation(
+        &self,
+        segment_id: &str,
+        translated_text: &str,
+    ) -> Result<DialogueSegmentRecord, String> {
+        let res = sqlx::query(
+            r#"
+            UPDATE dialogue_segments SET
+                translated_text = ?1,
+                translation_status = 'edited',
+                updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+            WHERE id = ?2
+            "#,
+        )
+        .bind(translated_text)
+        .bind(segment_id)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| format!("Failed to update segment translation: {e}"))?;
+
+        if res.rows_affected() == 0 {
+            return Err(format!("Segment '{segment_id}' not found"));
+        }
+
+        sqlx::query_as::<_, DialogueSegmentRecord>("SELECT * FROM dialogue_segments WHERE id = ?1")
+            .bind(segment_id)
+            .fetch_one(&self.pool)
+            .await
+            .map_err(|e| format!("Failed to reload translated segment: {e}"))
+    }
+
+    pub async fn assign_speaker_voice(
+        &self,
+        speaker_id: &str,
+        voice_provider_id: &str,
+        voice_id: &str,
+        voice_settings_json: &str,
+    ) -> Result<SpeakerRecord, String> {
+        let res = sqlx::query(
+            r#"
+            UPDATE speakers SET
+                voice_provider_id = ?1,
+                voice_id = ?2,
+                voice_settings_json = ?3,
+                updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+            WHERE id = ?4
+            "#,
+        )
+        .bind(voice_provider_id)
+        .bind(voice_id)
+        .bind(voice_settings_json)
+        .bind(speaker_id)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| format!("Failed to assign speaker voice: {e}"))?;
+
+        if res.rows_affected() == 0 {
+            return Err(format!("Speaker '{speaker_id}' not found"));
+        }
+
+        sqlx::query_as::<_, SpeakerRecord>("SELECT * FROM speakers WHERE id = ?1")
+            .bind(speaker_id)
+            .fetch_one(&self.pool)
+            .await
+            .map_err(|e| format!("Failed to reload speaker: {e}"))
+    }
+
+    pub async fn update_segment_tts_output(
+        &self,
+        segment_id: &str,
+        provider_id: &str,
+        voice_id: &str,
+        audio_path: &str,
+        duration_ms: i64,
+    ) -> Result<DialogueSegmentRecord, String> {
+        let res = sqlx::query(
+            r#"
+            UPDATE dialogue_segments SET
+                tts_provider_id = ?1,
+                tts_voice_id = ?2,
+                tts_audio_path = ?3,
+                tts_duration_ms = ?4,
+                updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+            WHERE id = ?5
+            "#,
+        )
+        .bind(provider_id)
+        .bind(voice_id)
+        .bind(audio_path)
+        .bind(duration_ms)
+        .bind(segment_id)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| format!("Failed to update segment TTS output: {e}"))?;
+
+        if res.rows_affected() == 0 {
+            return Err(format!("Segment '{segment_id}' not found"));
+        }
+
+        sqlx::query_as::<_, DialogueSegmentRecord>("SELECT * FROM dialogue_segments WHERE id = ?1")
+            .bind(segment_id)
+            .fetch_one(&self.pool)
+            .await
+            .map_err(|e| format!("Failed to reload segment: {e}"))
     }
 }

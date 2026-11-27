@@ -1,3 +1,4 @@
+pub mod localization;
 pub mod projects;
 pub mod scheduler;
 pub mod transcription;
