@@ -13,12 +13,15 @@ describe("XakuStudio workstation shell", () => {
     });
   });
 
-  it("renders workstation dashboard, navigates to Projects and Models, and switches themes", () => {
+  it("renders workstation dashboard, navigates to Auto-Dubbing, Projects, and Models, and switches themes", () => {
     render(<App />);
 
     expect(screen.getByText("XakuStudio")).toBeInTheDocument();
     expect(screen.getByText("Workstation Foundation")).toBeInTheDocument();
     expect(screen.getByText("FFmpeg Engine")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /^Auto-Dubbing$/i }));
+    expect(screen.getByText("Transcription & Speakers")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /^Projects$/i }));
     expect(screen.getByText("New Project")).toBeInTheDocument();

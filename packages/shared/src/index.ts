@@ -202,3 +202,50 @@ export interface DownloadRecord {
   error_message: string | null;
   updated_at: string;
 }
+
+export interface SpeakerRecord {
+  id: string;
+  project_id: string;
+  diarization_label: string;
+  display_name: string;
+  voice_gender_est: string;
+  gender_confidence: number;
+  pitch_hz_avg: number | null;
+  voice_provider_id: string | null;
+  voice_id: string | null;
+  voice_settings_json: string;
+  is_user_overridden: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DialogueSegmentRecord {
+  id: string;
+  project_id: string;
+  segment_index: number;
+  speaker_id: string | null;
+  start_ms: number;
+  end_ms: number;
+  source_text: string;
+  source_text_original: string;
+  words_json: string;
+  emotion_est: string;
+  emotion_confidence: number;
+  translated_text: string;
+  translated_text_auto: string;
+  translation_status: string;
+  tts_provider_id: string | null;
+  tts_voice_id: string | null;
+  tts_audio_path: string | null;
+  tts_duration_ms: number | null;
+  sync_mode: string;
+  speed_ratio: number;
+  gain_db: number;
+  updated_at: string;
+}
+
+export interface TranscriptPayload {
+  segments: DialogueSegmentRecord[];
+  speakers: SpeakerRecord[];
+  latest_run_tasks: TaskRecord[];
+}

@@ -6,20 +6,18 @@ import { HomeDashboard } from "@/features/home/HomeDashboard";
 import { ModelsProvidersView } from "@/features/models/ModelsProvidersView";
 import { ProjectsView } from "@/features/projects/ProjectsView";
 import { SettingsView } from "@/features/settings/SettingsView";
+import { TranscriptionView } from "@/features/transcription/TranscriptionView";
 import { useAppStore, type NavSection } from "@/stores/appStore";
 
 const queryClient = new QueryClient();
 
 const STAGE_DETAILS: Record<
-  Exclude<NavSection, "home" | "projects" | "models" | "settings">,
+  Exclude<
+    NavSection,
+    "home" | "projects" | "auto-dubbing" | "models" | "settings"
+  >,
   { title: string; stage: string; description: string }
 > = {
-  "auto-dubbing": {
-    title: "Auto-Dubbing Pipeline",
-    stage: "Stage 4–7 — End-to-End Dubbing Workflow",
-    description:
-      "Automated Chinese → Khmer transcription, diarization, translation, voice generation, and video rendering.",
-  },
   "manual-studio": {
     title: "Manual Studio & Timeline",
     stage: "Stage 6 — Dialogue Sync & Segment Editing",
@@ -62,6 +60,8 @@ function AppContent() {
             <HomeDashboard />
           ) : activeSection === "projects" ? (
             <ProjectsView />
+          ) : activeSection === "auto-dubbing" ? (
+            <TranscriptionView />
           ) : activeSection === "models" ? (
             <ModelsProvidersView />
           ) : activeSection === "settings" ? (

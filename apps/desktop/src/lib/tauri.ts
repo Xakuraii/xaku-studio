@@ -1,15 +1,18 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
+  DialogueSegmentRecord,
   DownloadRecord,
   MediaEngineStatus,
   ProjectRecord,
   ProjectSummary,
   ProviderCatalogEntry,
   SelfTestResult,
+  SpeakerRecord,
   SystemResourceInfo,
   TaskProgressEvent,
   TaskRecord,
+  TranscriptPayload,
   WorkerStatus,
 } from "@xakustudio/shared";
 
@@ -176,6 +179,86 @@ export async function resumeAssetDownload(
 
 export async function cancelAssetDownload(downloadId: string): Promise<boolean> {
   return invoke<boolean>("cancel_asset_download", { downloadId });
+}
+
+export async function startTranscription(
+  projectId: string,
+  modelSize?: string
+): Promise<TaskRecord[]> {
+  return invoke<TaskRecord[]>("start_transcription", {
+    projectId,
+    modelSize: modelSize ?? null,
+  });
+}
+
+export async function getTranscript(
+  projectId: string
+): Promise<TranscriptPayload> {
+  return invoke<TranscriptPayload>("get_transcript", { projectId });
+}
+
+export async function updateSegmentText(
+  segmentId: string,
+  sourceText: string
+): Promise<DialogueSegmentRecord> {
+  return invoke<DialogueSegmentRecord>("update_segment_text", {
+    segmentId,
+    sourceText,
+  });
+}
+
+export async function updateSegmentSpeaker(
+  segmentId: string,
+  speakerId: string | null
+): Promise<DialogueSegmentRecord> {
+  return invoke<DialogueSegmentRecord>("update_segment_speaker", {
+    segmentId,
+    speakerId,
+  });
+}
+
+export async function createSpeaker(
+  projectId: string,
+  displayName: string
+): Promise<SpeakerRecord> {
+  return invoke<SpeakerRecord>("create_speaker", { projectId, displayName });
+}
+
+export async function renameSpeaker(
+  speakerId: string,
+  displayName: string
+): Promise<SpeakerRecord> {
+  return invoke<SpeakerRecord>("rename_speaker", { speakerId, displayName });
+}
+
+export async function setSpeakerVoicePresentation(
+  speakerId: string,
+  voiceGenderEst: "masculine" | "feminine" | "uncertain"
+): Promise<SpeakerRecord> {
+  return invoke<SpeakerRecord>("set_speaker_voice_presentation", {
+    speakerId,
+    voiceGenderEst,
+  });
+}
+
+export async function mergeSpeakers(
+  sourceSpeakerId: string,
+  targetSpeakerId: string
+): Promise<void> {
+  return invoke<void>("merge_speakers", {
+    sourceSpeakerId,
+    targetSpeakerId,
+  });
+}
+
+export async function splitSegment(
+  segmentId: string,
+  charIndex: number
+): Promise<DialogueSegmentRecord[]> {
+  return invoke<DialogueSegmentRecord[]>("split_segment", {
+    segmentId,
+    charIndex,
+  });
 }
 
 export async function subscribeSchedulerEvents(
